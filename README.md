@@ -207,10 +207,10 @@ Todas as variáveis estão documentadas em `.env.example`:
 |---|---|---|
 | `WP_PORT` | `8080` | Porta local do WordPress |
 | `WP_DEBUG` | `true` | Habilita WP_DEBUG no WordPress |
-| `MYSQL_DATABASE` | `wordpress` | Nome do banco de dados |
-| `MYSQL_USER` | `wp_user` | Usuário do banco |
-| `MYSQL_PASSWORD` | `wp_password` | Senha do banco |
-| `MYSQL_ROOT_PASSWORD` | `root_password` | Senha root do MariaDB |
+| `MARIADB_DATABASE` | `wordpress` | Nome do banco de dados |
+| `MARIADB_USER` | `wp_user` | Usuário do banco |
+| `MARIADB_PASSWORD` | `wp_password` | Senha do banco |
+| `MARIADB_ROOT_PASSWORD` | `root_password` | Senha root do MariaDB |
 | `PMA_PORT` | `8081` | Porta local do phpMyAdmin |
 | `PROJECT_NAME` | `Meu Projeto WordPress` | Título do site |
 | `WP_ADMIN_USER` | `admin` | Usuário admin do WordPress |
