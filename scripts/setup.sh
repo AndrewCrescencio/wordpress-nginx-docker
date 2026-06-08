@@ -118,18 +118,44 @@ else
     info "WordPress instalado com sucesso!"
 fi
 
-# ─── 9. Ativar plugins essenciais ───────────────────────────
-step "Plugins essenciais"
+# ─── 9. Instalar plugins gratuitos via WP-CLI ──────────────
+step "Plugins (WordPress.org)"
 
-# redis-cache: object cache via Redis
-if docker compose exec -T wordpress wp plugin is-installed redis-cache 2>/dev/null; then
-    info "redis-cache já instalado"
+install_plugin() {
+    local slug=$1
+    if docker compose exec -T wordpress wp plugin is-installed "$slug" 2>/dev/null; then
+        info "$slug já instalado"
+    else
+        info "Instalando $slug..."
+        docker compose exec -T wordpress wp plugin install "$slug" --activate
+    fi
+}
+
+install_plugin redis-cache
+install_plugin elementor
+install_plugin image-optimization
+
+# ─── 10. Elementor Pro (comercial) ─────────────────────────
+step "Elementor Pro"
+
+if [ -d plugins/pro-elements ] && [ -f plugins/pro-elements/pro-elements.php ]; then
+    if docker compose exec -T wordpress wp plugin is-installed pro-elements 2>/dev/null; then
+        info "pro-elements já instalado"
+    else
+        info "Ativando pro-elements (encontrado localmente)..."
+        docker compose exec -T wordpress wp plugin activate pro-elements
+    fi
 else
-    info "Instalando redis-cache..."
-    docker compose exec -T wordpress wp plugin install redis-cache --activate
+    warn "pro-elements não encontrado em plugins/"
+    warn "Para instalar:"
+    warn "  1. Baixe o ZIP em https://elementor.com/my-account/"
+    warn "  2. Extraia em plugins/pro-elements/"
+    warn "  3. Execute: docker compose exec wordpress wp plugin activate pro-elements"
+    warn "  Ou use: docker compose run --rm wpcli wp plugin install /path/to/pro-elements.zip"
 fi
 
 # Ativa a conexão com Redis
+step "Redis"
 docker compose exec -T wordpress wp redis enable --force 2>/dev/null && \
     info "Redis cache ativado" || true
 
@@ -161,13 +187,11 @@ echo ""
 echo "  ─── Comandos úteis ───"
 echo "  docker compose ps              # Status dos containers"
 echo "  docker compose logs -f         # Logs em tempo real"
-echo "  docker compose logs -f nginx   # Logs do Nginx"
 echo "  docker compose down            # Parar tudo"
+echo "  docker compose run --rm wpcli wp ...   # WP-CLI"
 echo "  bash export.sh                 # Exportar DB"
-echo "  docker compose run --rm wp-cli wp ...   # WP-CLI avulso"
 echo ""
 echo "  ─── Pastas do projeto ───"
-echo "  plugins/           → wp-content/plugins"
+echo "  plugins/           → wp-content/plugins (apenas plugins próprios no Git)"
 echo "  themes/            → wp-content/themes"
-echo "  elementor-projects/ → Projetos Elementor sem código PHP"
 echo "=============================================="
