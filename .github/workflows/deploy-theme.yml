@@ -1,0 +1,100 @@
+# ─── Deploy de Tema/Plugin ─────────────────────────────────────
+# Workflow manual (workflow_dispatch) para deploy via rsync.
+#
+# ⚠️  Antes de usar:
+#   1. Configure as secrets no GitHub:
+#      - SSH_PRIVATE_KEY (chave privada RSA/ED25519)
+#      - DEPLOY_HOST     (IP ou domínio do servidor)
+#      - DEPLOY_USER     (usuário SSH)
+#      - DEPLOY_PATH     (caminho absoluto até wp-content/)
+#   2. A chave pública deve estar em ~/.ssh/authorized_keys no servidor
+#   3. Descomente o bloco rsync no job "deploy" abaixo
+#
+# Uso:
+#   gh workflow run deploy-theme.yml -f type=theme -f slug=meu-tema -f environment=staging
+
+name: Deploy Tema/Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Tipo de artefato'
+        required: true
+        default: 'theme'
+        type: choice
+        options:
+          - theme
+          - plugin
+      slug:
+        description: 'Slug (nome da pasta em themes/ ou plugins/)'
+        required: true
+        type: string
+      environment:
+        description: 'Ambiente de destino'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar se o diretório existe
+        run: |
+          if [ "${{ inputs.type }}" = "theme" ]; then
+            dir="themes/${{ inputs.slug }}"
+          else
+            dir="plugins/${{ inputs.slug }}"
+          fi
+          if [ ! -d "$dir" ]; then
+            echo "❌ Diretório '$dir' não encontrado"
+            exit 1
+          fi
+          echo "✅ Diretório '$dir' encontrado"
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via rsync sobre SSH
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          REMOTE_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          echo "🚀 Deploy de ${{ inputs.type }} '${{ inputs.slug }}' → ${{ inputs.environment }}"
+          echo ""
+
+          # ─── Descomente abaixo após configurar as secrets ───
+          #
+          # mkdir -p ~/.ssh
+          # echo "$SSH_KEY" > ~/.ssh/id_rsa
+          # chmod 600 ~/.ssh/id_rsa
+          # ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          #
+          # if [ "${{ inputs.type }}" = "theme" ]; then
+          #   rsync -avz --delete \
+          #     --exclude='.git/' --exclude='node_modules/' --exclude='vendor/' \
+          #     "themes/${{ inputs.slug }}/" \
+          #     "${SSH_USER}@${SSH_HOST}:${REMOTE_PATH}/themes/${{ inputs.slug }}/"
+          # else
+          #   rsync -avz --delete \
+          #     --exclude='.git/' --exclude='node_modules/' --exclude='vendor/' \
+          #     "plugins/${{ inputs.slug }}/" \
+          #     "${SSH_USER}@${SSH_HOST}:${REMOTE_PATH}/plugins/${{ inputs.slug }}/"
+          # fi
+
+          echo ""
+          echo "⚠️  Este workflow está configurado como template."
+          echo "   Para ativar:"
+          echo "   1. Configure as secrets SSH_PRIVATE_KEY, DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH"
+          echo "   2. Descomente o bloco rsync acima"
+          echo "   3. Remova o 'echo' de placeholders"

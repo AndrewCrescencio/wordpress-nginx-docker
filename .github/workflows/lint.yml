@@ -1,0 +1,32 @@
+name: PHP Lint (WordPress Coding Standards)
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/**/*.php'
+      - 'themes/**/*.php'
+  workflow_dispatch:
+
+jobs:
+  phpcs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer
+
+      - name: Install PHPCS + WordPress Coding Standards
+        run: |
+          composer global require wp-coding-standards/wpcs
+          phpcs --config-set installed_paths "$HOME/.composer/vendor/wp-coding-standards/wpcs"
+
+      - name: Run PHPCS on plugins/ and themes/
+        run: |
+          phpcs --standard=WordPress \
+            --extensions=php \
+            --ignore=*/vendor/*,*/node_modules/*,elementor-projects/* \
+            plugins/ themes/

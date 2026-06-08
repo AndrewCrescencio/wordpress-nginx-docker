@@ -1,0 +1,58 @@
+name: Build Check
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - '.env.example'
+      - 'docker/**'
+      - 'config/**'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config
+
+      - name: Check .env.example completeness
+        run: |
+          echo "Verificando se todas as variáveis do .env.example têm valores padrão..."
+          missing=0
+          while IFS= read -r var; do
+            # Pula comentários e linhas vazias
+            [[ "$var" =~ ^#.*$ ]] && continue
+            [[ -z "$var" ]] && continue
+            # Verifica se a variável tem valor atribuído (não apenas exportada vazia)
+            if [[ "$var" =~ ^[A-Z_]+=$ ]] || [[ "$var" =~ ^export\ [A-Z_]+=$ ]]; then
+              echo "❌ Variável sem valor: $var"
+              missing=$((missing+1))
+            fi
+          done < .env.example
+          if [ "$missing" -eq 0 ]; then
+            echo "✅ .env.example está completo"
+          else
+            echo "⚠️  $missing variável(is) sem valor padrão"
+            exit 1
+          fi
+
+  wpcs-available:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP files exist in plugins/ or themes/
+        id: check_files
+        run: |
+          files=$(find plugins themes -name '*.php' 2>/dev/null | head -5)
+          if [ -n "$files" ]; then
+            echo "has_php=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_php=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Notify if no PHP files
+        if: steps.check_files.outputs.has_php == 'false'
+        run: |
+          echo "ℹ️  Nenhum arquivo PHP encontrado em plugins/ ou themes/. Lint será ignorado."
