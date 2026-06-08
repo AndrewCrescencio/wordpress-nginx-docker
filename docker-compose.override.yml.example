@@ -1,5 +1,5 @@
 # ─── docker-compose.override.yml.example ────────────────────────
-# Copie para docker-compose.override.yml e customize.
+# Copie para docker-compose.override.yml e customize localmente.
 # Este arquivo NÃO deve ser versionado (está no .gitignore).
 #
 # Valores aqui sobrescrevem ou estendem o docker-compose.yml.
@@ -13,16 +13,15 @@ services:
         define('WP_DEBUG', true);
         define('WP_DEBUG_LOG', true);
         define('WP_DEBUG_DISPLAY', true);
-        define('WP_REDIS_HOST', 'redis');
         define('SAVEQUERIES', true);
-    # Expor porta 9000 para debug com xdebug
-    # ports:
-    #   - "9000:9000"
+        # Descomente se estiver usando Redis (docker compose --profile redis up -d)
+        # define('WP_REDIS_HOST', 'redis');
 
   db:
+    # Expõe o banco diretamente para conectar com TablePlus, DBeaver, etc.
     ports:
       - "3306:3306"
 
   phpmyadmin:
-    # Forçar ativação do phpMyAdmin
+    # Força ativação do phpMyAdmin sem precisar do --profile dev
     profiles: []
