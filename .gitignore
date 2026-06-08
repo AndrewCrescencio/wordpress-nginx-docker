@@ -13,6 +13,12 @@ logs/
 # ─── docker-compose.override.yml (cada dev tem o seu) ──────────
 docker-compose.override.yml
 
+# ─── Plugins de terceiros (instalados via setup.sh ou manual) ──
+/plugins/akismet/
+/plugins/elementor/
+/plugins/image-optimization/
+/plugins/pro-elements/
+
 # ─── Dependências ───────────────────────────────────────────────
 node_modules/
 vendor/
