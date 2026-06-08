@@ -1,381 +1,315 @@
-# WordPress (FPM Edition) - Docker
+# WordPress Development Environment
 
-Notes on deploying a single site [WordPress FPM Edition](https://hub.docker.com/_/wordpress/) instance as a docker deployment orchestrated by Docker Compose.
+Monorepo oficial do time para desenvolvimento de plugins e temas WordPress.
 
-- Use the FPM version of WordPress (v5-fpm)
-- Use MySQL as the database (v8)
-- Use Nginx as the web server (v1)
-- Use Adminer as the database management tool (v4)
-- Include self-signed SSL certificate ([Let's Encrypt localhost](https://letsencrypt.org/docs/certificates-for-localhost/) format)
-
-**DISCLAIMER: The code herein may not be up to date nor compliant with the most recent package and/or security notices. The frequency at which this code is reviewed and updated is based solely on the lifecycle of the project for which it was written to support, and is not actively maintained outside of that scope. Use at your own risk.**
-
-## Table of contents
-
-- [Overview](#overview)
-    - [Host requirements](#reqts)
-- [Configuration](#config)
-- [Deploy](#deploy)
-- [Adminer](#adminer)
-- [Teardown](#teardown)
-- [References](#references)
-- [Notes](#notes)
-
-## <a name="overview"></a>Overview
-
-WordPress is a free and open source blogging tool and a content management system (CMS) based on PHP and MySQL, which runs on a web hosting service. Features include a plugin architecture and a template system.
-
-This variant contains PHP-FPM, which is a FastCGI implementation for PHP. 
-
-- See the [PHP-FPM website](https://php-fpm.org/) for more information about PHP-FPM.
-- In order to use this image variant, some kind of reverse proxy (such as NGINX, Apache, or other tool which speaks the FastCGI protocol) will be required.
-
-### <a name="reqts"></a>Host requirements
-
-Both Docker and Docker Compose are required on the host to run this code
-
-- Install Docker Engine: [https://docs.docker.com/engine/install/](https://docs.docker.com/engine/install/)
-- Install Docker Compose: [https://docs.docker.com/compose/install/](https://docs.docker.com/compose/install/)
-
-## <a name="config"></a>Configuration
-
-Copy the `env.template` file as `.env` and populate according to your environment
-
-```ini
-# docker-compose environment file
-#
-# When you set the same environment variable in multiple files,
-# here’s the priority used by Compose to choose which value to use:
-#
-#  1. Compose file
-#  2. Shell environment variables
-#  3. Environment file
-#  4. Dockerfile
-#  5. Variable is not defined
-
-# Wordpress Settings
-export WORDPRESS_LOCAL_HOME=./wordpress
-export WORDPRESS_UPLOADS_CONFIG=./config/uploads.ini
-export WORDPRESS_DB_HOST=database:3306
-export WORDPRESS_DB_NAME=wordpress
-export WORDPRESS_DB_USER=wordpress
-export WORDPRESS_DB_PASSWORD=password123!
-
-# MySQL Settings
-export MYSQL_LOCAL_HOME=./dbdata
-export MYSQL_DATABASE=${WORDPRESS_DB_NAME}
-export MYSQL_USER=${WORDPRESS_DB_USER}
-export MYSQL_PASSWORD=${WORDPRESS_DB_PASSWORD}
-export MYSQL_ROOT_PASSWORD=rootpassword123!
-
-# Nginx Settings
-export NGINX_CONF=./nginx/default.conf
-export NGINX_SSL_CERTS=./ssl
-export NGINX_LOGS=./logs/nginx
-
-# User Settings
-# TBD
-```
-
-Modify `nginx/default.conf` and replace `$host` and `8443` with your **Domain Name** and exposed **HTTPS Port** throughout the file
-
-```conf
-# default.conf
-# redirect to HTTPS
-server {
-    listen 80;
-    listen [::]:80;
-    server_name $host;
-    location / {
-        # update port as needed for host mapped https
-        rewrite ^ https://$host:8443$request_uri? permanent;
-    }
-}
-
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $host;
-    index index.php index.html index.htm;
-    root /var/www/html;
-    server_tokens off;
-    client_max_body_size 75M;
-
-    # update ssl files as required by your deployment
-    ssl_certificate /etc/ssl/fullchain.pem;
-    ssl_certificate_key /etc/ssl/privkey.pem;
-
-    # logging
-    access_log /var/log/nginx/wordpress.access.log;
-    error_log /var/log/nginx/wordpress.error.log;
-
-    # some security headers ( optional )
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-    add_header Content-Security-Policy "default-src * data: 'unsafe-eval' 'unsafe-inline'" always;
-
-    location / {
-        try_files $uri $uri/ /index.php$is_args$args;
-    }
-
-    location ~ \.php$ {
-        try_files $uri = 404;
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
-        fastcgi_pass wordpress:9000;
-        fastcgi_index index.php;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param PATH_INFO $fastcgi_path_info;
-    }
-
-    location ~ /\.ht {
-        deny all;
-    }
-
-    location = /favicon.ico {
-        log_not_found off; access_log off;
-    }
-
-    location = /favicon.svg {
-        log_not_found off; access_log off;
-    }
-
-    location = /robots.txt {
-        log_not_found off; access_log off; allow all;
-    }
-
-    location ~* \.(css|gif|ico|jpeg|jpg|js|png)$ {
-        expires max;
-        log_not_found off;
-    }
-}
-```
-
-Modify the `config/uploads.ini` file if the preset values are not to your liking (defaults shown below)
-
-```ini
-file_uploads = On
-memory_limit = 256M
-upload_max_filesize = 75M
-post_max_size = 75M
-max_execution_time = 600
-```
-
-Included `uploads.ini` file allows for **Maximum upload file size: 75 MB**
-
-![](./imgs/WP-media-filesize.png)
-
-## <a name="deploy"></a>Deploy
-
-Once configured the containers can be brought up using Docker Compose
-
-1. Set the environment variables and pull the images
-
-    ```console
-    source .env
-    docker-compose pull
-    ```
-
-2. Bring up the Database and allow it a moment to create the WordPress user and database tables
-
-    ```console
-    docker-compose up -d database
-    ```
-    
-    You will know it's ready when you see something like this in the docker logs
-    
-    ```console
-    $ docker-compose logs database
-    wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.28-1debian10 started.
-    wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'
-    wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.28-1debian10 started.
-    wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Initializing database files
-    ...
-    wp-database  | 2022-01-28 13:40:28+00:00 [Note] [Entrypoint]: Creating database wordpress
-    wp-database  | 2022-01-28 13:40:28+00:00 [Note] [Entrypoint]: Creating user wordpress
-    wp-database  | 2022-01-28 13:40:28+00:00 [Note] [Entrypoint]: Giving user wordpress access to schema wordpress
-    wp-database  |
-    wp-database  | 2022-01-28 13:40:28+00:00 [Note] [Entrypoint]: Stopping temporary server
-    wp-database  | 2022-01-28T13:40:29.002886Z 13 [System] [MY-013172] [Server] Received SHUTDOWN from user root. Shutting down mysqld (Version: 8.0.28).
-    wp-database  | 2022-01-28T13:40:30.226306Z 0 [System] [MY-010910] [Server] /usr/sbin/mysqld: Shutdown complete (mysqld 8.0.28)  MySQL Community Server - GPL.
-    wp-database  | 2022-01-28 13:40:31+00:00 [Note] [Entrypoint]: Temporary server stopped
-    wp-database  |
-    wp-database  | 2022-01-28 13:40:31+00:00 [Note] [Entrypoint]: MySQL init process done. Ready for start up.
-    wp-database  |
-    ...
-    wp-database  | 2022-01-28T13:40:32.061642Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060, socket: /var/run/mysqld/mysqlx.sock
-    wp-database  | 2022-01-28T13:40:32.061790Z 0 [System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.0.28'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server - GPL.
-    ```
-
-3. Bring up the WordPress and Nginx containers
-
-    ```console
-    docker-compose up -d wordpress nginx
-    ```
-    
-    After a few moments the containers should be observed as running
-    
-    ```console
-    $ docker-compose ps
-    NAME                COMMAND                  SERVICE             STATUS              PORTS
-    wp-database         "docker-entrypoint.s…"   database            running             33060/tcp
-    wp-nginx            "/docker-entrypoint.…"   nginx               running             0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp
-    wp-wordpress        "docker-entrypoint.s…"   wordpress           running             9000/tcp
-    ```
-
-The WordPress application can be reached at the designated host and port (e.g. [https://127.0.0.1:8443]()).
-
-- **NOTE**: you will likely have to acknowledge the security risk if using the included self-signed certificate.
-
-![](./imgs/WP-first-run.png) 
-
-Complete the initial WordPress installation process, and when completed you should see something similar to this.
-
-![](./imgs/WP-dashboard.png)
-![](./imgs/WP-view-site.png)
-
-## <a name="adminer"></a>Adminer
-
-An Adminer configuration has been included in the `docker-compose.yml` definition file, but commented out. Since it bypasses Nginx it is recommended to only use Adminer as needed, and to not let it run continuously.
-
-Expose Adminer by uncommenting the `adminer` section of the `docker-compose.yml` file
-
-```yaml
-...
-  # adminer - bring up only as needed - bypasses nginx
-  adminer:
-    # default port 8080
-    image: adminer:4
-    container_name: wp-adminer
-    restart: unless-stopped
-    networks:
-      - wordpress
-    depends_on:
-      - database
-    ports:
-      - "9000:8080"
-...
-```
-
-And run the `adminer` container
-
-```console
-$ docker-compose up -d adminer
-[+] Running 2/2
- ⠿ Container wp-database  Running                                                                                                      0.0s
- ⠿ Container wp-adminer   Started                                                                                                      0.9s
-```
-
-Since Adminer is bypassing our Nginx configuration it will be running over HTTP in plain text on port 9000 (e.g. [http://127.0.0.1:9000/]())
-
-![](./imgs/WP-adminer.png)
-
-Enter the connection information for your Database and you should see something similar to image below.
-
-Example connection information:
-
-- System: **MySQL**
-- Server: **database**
-- Username: **wordpress**
-- Password: **password123!**
-- Database: **wordpress**
-
-    **NOTE**: Since `adminer` is defined in the same docker-compose file as the MySQL Database it will "understand" the **Server** reference as **database**, otherwise this would need to be a formal URL reference
-
-![](./imgs/WP-adminer-connected.png)
-
-When finished, stop and remove the `adminer` container.
-
-```console
-$ docker-compose stop adminer
-[+] Running 1/1
- ⠿ Container wp-adminer  Stopped                                                                                                       0.1s
-$ docker-compose rm -fv adminer
-Going to remove wp-adminer
-[+] Running 1/0
- ⠿ Container wp-adminer  Removed                                                                                                       0.0s
-```
-
-## <a name="teardown"></a>Teardown
-
-For a complete teardown all containers must be stopped and removed along with the volumes and network that were created for the application containers
-
-Commands
-
-```console
-docker-compose stop
-docker-compose rm -fv
-docker-network rm wp-wordpress
-# removal calls may require sudo rights depending on file permissions
-rm -rf ./wordpress
-rm -rf ./dbdata
-rm -rf ./logs
-```
-
-Expected output
-
-```console
-$ docker-compose stop
-[+] Running 3/3
- ⠿ Container wp-nginx      Stopped                                                                                                     0.3s
- ⠿ Container wp-wordpress  Stopped                                                                                                     0.2s
- ⠿ Container wp-database   Stopped                                                                                                     0.8s
-$ docker-compose rm -fv
-Going to remove wp-nginx, wp-wordpress, wp-database
-[+] Running 3/0
- ⠿ Container wp-nginx      Removed                                                                                                     0.0s
- ⠿ Container wp-database   Removed                                                                                                     0.0s
- ⠿ Container wp-wordpress  Removed                                                                                                     0.0s
-$ docker network rm wp-wordpress
-wp-wordpress
-$ rm -rf ./wordpress
-$ rm -rf ./dbdata
-$ rm -rf ./logs
-```
-
-## <a name="references"></a>References
-
-- WordPress Docker images: [https://hub.docker.com/_/wordpress/](https://hub.docker.com/_/wordpress/)
-- MySQL Docker images: [https://hub.docker.com/_/mysql](https://hub.docker.com/_/mysql)
-- Nginx Docker images: [https://hub.docker.com/_/nginx/](https://hub.docker.com/_/nginx/)
-- Adminer Docker images: [https://hub.docker.com/_/adminer](https://hub.docker.com/_/adminer)
+**Stack:** Docker Compose • Nginx • PHP-FPM • MariaDB 10.11 • Redis • phpMyAdmin
 
 ---
 
-## <a name="notes"></a>Notes
+## Índice
 
-General information regarding standard Docker deployment of WordPress for reference purposes
+- [Pré-requisitos](#pré-requisitos)
+- [Setup rápido](#setup-rápido)
+- [Estrutura do repositório](#estrutura-do-repositório)
+- [Fluxo de trabalho](#fluxo-de-trabalho)
+- [Como criar um plugin](#como-criar-um-plugin)
+- [Como criar um tema](#como-criar-um-tema)
+- [Como adicionar um projeto Elementor](#como-adicionar-um-projeto-elementor)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Comandos úteis](#comandos-úteis)
+- [CI/CD](#cicd)
 
-### Let's Encrypt SSL Certificate
+---
 
-Use: [https://github.com/RENCI-NRIG/ez-letsencrypt](https://github.com/RENCI-NRIG/ez-letsencrypt) - A shell script to obtain and renew [Let's Encrypt](https://letsencrypt.org/) certificates using Certbot's `--webroot` method of [certificate issuance](https://certbot.eff.org/docs/using.html#webroot).
+## Pré-requisitos
 
-### Error establishing database connection
+| Ferramenta | Versão | Instalação |
+|---|---|---|
+| Docker Engine | >= 24 | [docs.docker.com/engine/install](https://docs.docker.com/engine/install/) |
+| Docker Compose | >= 2.24 | Incluso no Docker Desktop |
+| Git | >= 2.40 | `apt install git` / `brew install git` |
 
-This can happen when the `wordpress` container attempts to reach the `database` container prior to it being ready for a connection.
+> **Windows:** Use WSL2 com Docker Desktop. Todos os scripts foram testados em Linux, macOS e WSL2.
 
-![](./imgs/WP-database-connection.png)
+---
 
-This will sometimes resolve itself once the database fully spins up, but generally it's advised to start the database first and ensure it's created all of its user and wordpress tables and then start the WordPress service.
+## Setup rápido
 
-### Port Mapping
+```bash
+# 1. Clone o repositório
+git clone <repo-url>
+cd wordpress-nginx-docker
 
-Neither the **wordpress** container nor the **database** container have publicly exposed ports. They are running on the host using a docker defined network which provides the containers with access to each others ports, but not from the host.
+# 2. Execute o script de onboarding
+bash scripts/setup.sh
+```
 
-If you wish to expose the ports to the host, you'd need to alter the stanzas for each in the `docker-compose.yml` file.
+O script irá:
 
-For the `database` stanza, add
+1. Criar `.env` a partir de `.env.example` (se não existir)
+2. Subir todos os containers (`docker compose up -d`)
+3. Aguardar o banco de dados ficar saudável
+4. Instalar WP-CLI no container WordPress
+5. Instalar o WordPress (se ainda não estiver instalado)
+6. Ativar plugins essenciais (redis-cache)
+7. Configurar permalinks para `/%postname%/`
+8. Remover plugins e temas padrão (Hello Dolly, Akismet, Twenty Twenty-Three)
+
+**Após o setup, acesse:** http://localhost:8080
+
+| Acesso | URL | Credenciais |
+|---|---|---|
+| Site | http://localhost:8080 | — |
+| WP Admin | http://localhost:8080/wp-admin | `admin` / `admin` |
+| phpMyAdmin | http://localhost:8081 | — |
+
+> Para usar portas diferentes, edite `WP_PORT` e `PMA_PORT` no `.env`.
+
+---
+
+## Estrutura do repositório
 
 ```
-    ports:
-      - "3306:3306"
+/
+├── plugins/                  # Plugins customizados do time
+│   └── meu-plugin/           # (exemplo — crie seu plugin aqui)
+├── themes/                   # Temas customizados
+│   └── meu-tema/             # (exemplo — crie seu tema aqui)
+├── elementor-projects/       # Projetos apenas com Elementor
+│   └── nome-do-cliente/      # Templates JSON, screenshots, notas
+├── docker/
+│   ├── nginx/
+│   │   └── default.conf      # Configuração do Nginx
+│   └── php/
+│       └── Dockerfile        # Dockerfile de referência para PHP-FPM
+├── .github/
+│   └── workflows/
+│       ├── lint.yml          # PHPCS em todo PR
+│       ├── build-check.yml   # Valida docker-compose e .env
+│       └── deploy-theme.yml  # Deploy manual (template)
+├── scripts/
+│   └── setup.sh              # Onboarding para novos devs
+├── config/
+│   └── uploads.ini           # Limites de upload do PHP
+├── nginx/                    # (legado) Config anterior
+├── ssl/                      # Certificados SSL para dev
+├── docker-compose.yml
+├── docker-compose.override.yml.example
+├── .env.example
+├── .editorconfig
+├── .gitignore
+└── README.md
 ```
 
-For the `wordpress` stanza, add
+---
 
+## Fluxo de trabalho
+
+1. **Crie uma branch** a partir de `master`:
+   ```bash
+   git checkout -b feat/nome-da-feature
+   # ou
+   git checkout -b fix/descricao-do-bug
+   ```
+
+2. **Desenvolva** em `plugins/` ou `themes/`
+3. **Commit e push:**
+   ```bash
+   git add .
+   git commit -m "feat: descrição clara do que foi feito"
+   git push origin feat/nome-da-feature
+   ```
+4. **Abra um Pull Request** no GitHub
+5. **Aguarde o CI** (lint + build check passarem)
+6. **Code review** por pelo menos um membro do time
+7. **Merge** para `master`
+
+### Convenção de commits
+
+Usamos [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` — nova funcionalidade
+- `fix:` — correção de bug
+- `chore:` — tarefas de manutenção
+- `docs:` — documentação
+- `refactor:` — refatoração (sem mudança de comportamento)
+
+---
+
+## Como criar um plugin
+
+1. Crie a pasta em `plugins/`:
+   ```bash
+   mkdir -p plugins/meu-plugin
+   ```
+
+2. Crie o arquivo principal:
+   ```php
+   <?php
+   /**
+    * Plugin Name: Meu Plugin
+    * Description: Descrição do que o plugin faz.
+    * Version: 1.0.0
+    * Author: Nome do Time
+    */
+   ```
+
+3. Estrutura mínima esperada:
+   ```
+   plugins/meu-plugin/
+   ├── meu-plugin.php          # Arquivo principal (comentário de cabeçalho)
+   ├── README.md               # Documentação do plugin
+   ├── src/                    # Código fonte (PSR-4)
+   ├── assets/                 # CSS, JS, imagens
+   └── languages/              # Arquivos de tradução (.pot, .po, .mo)
+   ```
+
+4. O plugin aparecerá em **WP Admin → Plugins** — ative-o por lá.
+
+> **Importante:** Todo código PHP em `plugins/` é verificado pelo PHP CodeSniffer com WordPress Coding Standards nos PRs.
+
+---
+
+## Como criar um tema
+
+1. Crie a pasta em `themes/`:
+   ```bash
+   mkdir -p themes/meu-tema
+   ```
+
+2. Crie os arquivos obrigatórios:
+   - `style.css` (comentário de cabeçalho do tema)
+   - `index.php`
+   - `functions.php`
+
+3. Estrutura mínima esperada:
+   ```
+   themes/meu-tema/
+   ├── style.css               # Comentário de cabeçalho (obrigatório)
+   ├── index.php               # Template principal
+   ├── functions.php           # Funções do tema
+   ├── screenshot.png          # Screenshot (1200x900)
+   ├── templates/              # Templates customizados
+   ├── assets/                 # CSS, JS, imagens
+   └── languages/              # Traduções
+   ```
+
+4. Ative o tema em **WP Admin → Aparência → Temas**.
+
+---
+
+## Como adicionar um projeto Elementor
+
+Para sites construídos inteiramente com Elementor (sem tema filho ou código PHP customizado):
+
+1. Crie a pasta em `elementor-projects/`:
+   ```bash
+   mkdir -p elementor-projects/nome-do-cliente
+   ```
+
+2. Adicione a documentação:
+   - `README.md` com informações de setup, plugins usados, URL de produção
+   - Templates exportados (`.json`) em `templates/`
+   - Screenshots das páginas em `page-screenshots/`
+
+3. Exemplo de estrutura:
+   ```
+   elementor-projects/nome-do-cliente/
+   ├── README.md
+   ├── templates/              # Templates .json exportados do Elementor
+   ├── site-settings/          # Configurações globais
+   └── page-screenshots/       # Screenshots de referência
+   ```
+
+> **Nota:** Projetos em `elementor-projects/` não passam pelo PHP CodeSniffer no CI.
+
+---
+
+## Variáveis de ambiente
+
+Todas as variáveis estão documentadas em `.env.example`:
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `WP_PORT` | `8080` | Porta local do WordPress |
+| `WP_DEBUG` | `true` | Habilita WP_DEBUG no WordPress |
+| `MYSQL_DATABASE` | `wordpress` | Nome do banco de dados |
+| `MYSQL_USER` | `wp_user` | Usuário do banco |
+| `MYSQL_PASSWORD` | `wp_password` | Senha do banco |
+| `MYSQL_ROOT_PASSWORD` | `root_password` | Senha root do MariaDB |
+| `PMA_PORT` | `8081` | Porta local do phpMyAdmin |
+| `PROJECT_NAME` | `Meu Projeto WordPress` | Título do site |
+| `WP_ADMIN_USER` | `admin` | Usuário admin do WordPress |
+| `WP_ADMIN_PASSWORD` | `admin` | Senha do admin |
+| `WP_ADMIN_EMAIL` | `dev@localhost.local` | Email do admin |
+
+---
+
+## Comandos úteis
+
+```bash
+# Gerenciamento dos containers
+docker compose up -d           # Iniciar todos os serviços
+docker compose down            # Parar e remover containers
+docker compose restart wordpress  # Reiniciar apenas o WordPress
+docker compose ps              # Status dos containers
+docker compose logs -f         # Logs de todos os serviços
+docker compose logs -f nginx   # Logs apenas do Nginx
+
+# WP-CLI (executando comandos no container)
+docker compose exec wordpress wp plugin list
+docker compose exec wordpress wp user list
+docker compose exec wordpress wp db export -
+
+# Acesso ao banco
+docker compose exec db mariadb -u wp_user -p wordpress
+
+# Acesso ao shell do container
+docker compose exec wordpress bash
+
+# Exportar banco de dados
+bash export.sh
+
+# phpMyAdmin (iniciar manualmente)
+docker compose --profile dev up -d phpmyadmin
 ```
-    ports:
-      - "9000:9000"
+
+---
+
+## CI/CD
+
+### Lint (`.github/workflows/lint.yml`)
+- Executa em todo PR que modifica `plugins/` ou `themes/`
+- Roda PHP CodeSniffer com WordPress Coding Standards
+- Ignora `elementor-projects/`
+
+### Build Check (`.github/workflows/build-check.yml`)
+- Valida que `docker-compose.yml` é sintaticamente válido
+- Verifica se `.env.example` tem todas as variáveis com valores padrão
+
+### Deploy (`.github/workflows/deploy-theme.yml`)
+- Workflow manual (`workflow_dispatch`) — template para deploy via rsync
+- Permite escolher tipo (theme/plugin), slug e ambiente (staging/production)
+- **Requer configuração de secrets no GitHub** (SSH_PRIVATE_KEY, DEPLOY_HOST, etc)
+
+---
+
+## Troubleshooting
+
+### "Error establishing a database connection"
+O banco pode não ter terminado a inicialização. Aguarde e tente novamente:
+```bash
+docker compose restart wordpress
+```
+
+### Porta 8080 já está em uso
+Edite `WP_PORT` no `.env` para uma porta livre e reinicie:
+```bash
+docker compose up -d
+```
+
+### Permissão negada ao acessar wp-content
+Os volumes montados (`plugins/`, `themes/`) usam o usuário do container (www-data). Em caso de problemas de permissão:
+```bash
+docker compose exec wordpress chown -R www-data:www-data /var/www/html/wp-content
 ```
