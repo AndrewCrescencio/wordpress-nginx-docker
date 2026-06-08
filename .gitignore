@@ -1,15 +1,39 @@
-# environment file
+# ─── Environment ────────────────────────────────────────────────
 .env
 
-# wordpress files
-wordpress
+# ─── WordPress core (gerenciado pela imagem Docker) ────────────
+wordpress/
 
-# mysql files
-dbdata
+# ─── Dados do banco de dados local ──────────────────────────────
+dbdata/
 
-# logging output
-logs
+# ─── Logs do Docker ────────────────────────────────────────────
+logs/
 
-# macOS and IDE
+# ─── docker-compose.override.yml (cada dev tem o seu) ──────────
+docker-compose.override.yml
+
+# ─── Dependências ───────────────────────────────────────────────
+node_modules/
+vendor/
+
+# ─── Artefatos de build ────────────────────────────────────────
+*.zip
+dist/
+build/
+.phpcs-cache
+
+# ─── Arquivos de sistema operacional ───────────────────────────
 .DS_Store
-.idea
+Thumbs.db
+*.swp
+*.swo
+*~
+.Directory
+
+# ─── IDEs ───────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
