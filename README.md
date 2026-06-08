@@ -1,6 +1,6 @@
-# WordPress Development Environment
+# WordPress Starter Template
 
-Monorepo oficial do time para desenvolvimento de plugins e temas WordPress.
+Template base para projetos WordPress com Docker. Para cada novo projeto, clone este repositório e renomeie.
 
 **Stack:** Docker Compose • Nginx • PHP-FPM • MariaDB 10.11 • Redis • phpMyAdmin
 
@@ -12,9 +12,10 @@ Monorepo oficial do time para desenvolvimento de plugins e temas WordPress.
 - [Setup rápido](#setup-rápido)
 - [Estrutura do repositório](#estrutura-do-repositório)
 - [Fluxo de trabalho](#fluxo-de-trabalho)
-- [Como criar um plugin](#como-criar-um-plugin)
-- [Como criar um tema](#como-criar-um-tema)
-- [Como adicionar um projeto Elementor](#como-adicionar-um-projeto-elementor)
+- [Adicionar código ao projeto](#adicionar-código-ao-projeto)
+  - [Criar um plugin](#criar-um-plugin)
+  - [Criar um tema](#criar-um-tema)
+
 - [Variáveis de ambiente](#variáveis-de-ambiente)
 - [Comandos úteis](#comandos-úteis)
 - [CI/CD](#cicd)
@@ -71,12 +72,10 @@ O script irá:
 
 ```
 /
-├── plugins/                  # Plugins customizados do time
+├── plugins/                  # Plugins do projeto
 │   └── meu-plugin/           # (exemplo — crie seu plugin aqui)
-├── themes/                   # Temas customizados
+├── themes/                   # Temas do projeto
 │   └── meu-tema/             # (exemplo — crie seu tema aqui)
-├── elementor-projects/       # Projetos apenas com Elementor
-│   └── nome-do-cliente/      # Templates JSON, screenshots, notas
 ├── docker/
 │   ├── nginx/
 │   │   └── default.conf      # Configuração do Nginx
@@ -136,7 +135,9 @@ Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 
 ---
 
-## Como criar um plugin
+## Adicionar código ao projeto
+
+### Criar um plugin
 
 1. Crie a pasta em `plugins/`:
    ```bash
@@ -170,7 +171,7 @@ Usamos [Conventional Commits](https://www.conventionalcommits.org/):
 
 ---
 
-## Como criar um tema
+### Criar um tema
 
 1. Crie a pasta em `themes/`:
    ```bash
@@ -195,33 +196,6 @@ Usamos [Conventional Commits](https://www.conventionalcommits.org/):
    ```
 
 4. Ative o tema em **WP Admin → Aparência → Temas**.
-
----
-
-## Como adicionar um projeto Elementor
-
-Para sites construídos inteiramente com Elementor (sem tema filho ou código PHP customizado):
-
-1. Crie a pasta em `elementor-projects/`:
-   ```bash
-   mkdir -p elementor-projects/nome-do-cliente
-   ```
-
-2. Adicione a documentação:
-   - `README.md` com informações de setup, plugins usados, URL de produção
-   - Templates exportados (`.json`) em `templates/`
-   - Screenshots das páginas em `page-screenshots/`
-
-3. Exemplo de estrutura:
-   ```
-   elementor-projects/nome-do-cliente/
-   ├── README.md
-   ├── templates/              # Templates .json exportados do Elementor
-   ├── site-settings/          # Configurações globais
-   └── page-screenshots/       # Screenshots de referência
-   ```
-
-> **Nota:** Projetos em `elementor-projects/` não passam pelo PHP CodeSniffer no CI.
 
 ---
 
@@ -281,7 +255,7 @@ docker compose --profile dev up -d phpmyadmin
 ### Lint (`.github/workflows/lint.yml`)
 - Executa em todo PR que modifica `plugins/` ou `themes/`
 - Roda PHP CodeSniffer com WordPress Coding Standards
-- Ignora `elementor-projects/`
+- Ignora `vendor/` e `node_modules/`
 
 ### Build Check (`.github/workflows/build-check.yml`)
 - Valida que `docker-compose.yml` é sintaticamente válido

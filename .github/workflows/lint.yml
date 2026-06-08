@@ -28,5 +28,5 @@ jobs:
         run: |
           phpcs --standard=WordPress \
             --extensions=php \
-            --ignore=*/vendor/*,*/node_modules/*,elementor-projects/* \
+            --ignore=*/vendor/*,*/node_modules/* \
             plugins/ themes/
